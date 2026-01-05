@@ -1,0 +1,8 @@
+{
+    "name": "Transport",
+    "version": "1.0.0",
+    "description": "Transport layer abstraction for SpeedCAN",
+    "keywords": "transport, serial, communication",
+    "frameworks": "arduino",
+    "platforms": "renesas-ra"
+}

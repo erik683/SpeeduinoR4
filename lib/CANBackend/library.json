@@ -1,0 +1,8 @@
+{
+    "name": "CANBackend",
+    "version": "1.0.0",
+    "description": "CAN controller abstraction for SpeedCAN",
+    "keywords": "can, canbus, controller",
+    "frameworks": "arduino",
+    "platforms": "renesas-ra"
+}

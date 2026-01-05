@@ -1,0 +1,11 @@
+{
+    "name": "Protocol",
+    "version": "1.0.0",
+    "description": "Protocol dispatcher for SpeedCAN",
+    "keywords": "protocol, dispatcher, handler",
+    "frameworks": "arduino",
+    "platforms": "renesas-ra",
+    "dependencies": {
+        "Transport": "*"
+    }
+}

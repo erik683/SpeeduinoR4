@@ -1,0 +1,13 @@
+{
+    "name": "SLCAN",
+    "version": "1.0.0",
+    "description": "SLCAN protocol handler for SpeedCAN",
+    "keywords": "slcan, can, protocol, lawicel",
+    "frameworks": "arduino",
+    "platforms": "renesas-ra",
+    "dependencies": {
+        "Transport": "*",
+        "CANBackend": "*",
+        "Protocol": "*"
+    }
+}
