@@ -1,5 +1,5 @@
 /**
- * SpeedCAN Configuration
+ * SpeeduinoR4 Configuration
  *
  * Global configuration settings for the SLCAN USB-to-CAN adapter firmware.
  * Target: Arduino Uno R4 WiFi with SN65HVD230 CAN transceiver
@@ -13,8 +13,8 @@
 // =============================================================================
 
 #define FIRMWARE_VERSION_MAJOR  1
-#define FIRMWARE_VERSION_MINOR  0
-#define FIRMWARE_NAME           "SpeedCAN"
+#define FIRMWARE_VERSION_MINOR  2
+#define FIRMWARE_NAME           "SpeeduinoR4"
 #define FIRMWARE_HW_VERSION     "1.0"   // Hardware revision string
 
 // =============================================================================
@@ -26,7 +26,7 @@
 #define RESPONSE_BUFFER_SIZE    64      // Max response line length
 
 // Serial RX buffering (for SerialTransport)
-#define SERIAL_RX_BUFFER_SIZE   256     // Per-line buffer (increased from 64)
+#define SERIAL_RX_BUFFER_SIZE   256     // Per-line buffer capacity
 #define SERIAL_CMD_QUEUE_SIZE   4       // Number of commands to queue
 #define MAX_CMDS_PER_LOOP       4       // Max commands processed per loop iteration
 
@@ -44,8 +44,11 @@
 #define DEFAULT_CAN_BITRATE     6       // S6 = 500 Kbps
 
 // CAN RX buffering (protocol layer - in SLCAN)
-#define CAN_RX_QUEUE_SIZE       64      // Ring buffer capacity
-#define MAX_FRAMES_PER_POLL     8       // Max frames forwarded per loop iteration
+#define CAN_RX_QUEUE_SIZE       128      // Ring buffer capacity
+#define MAX_FRAMES_PER_POLL     6       // Max frames forwarded per loop iteration
+
+// CAN TX buffering (backend layer - in RA4M1CAN)
+#define CAN_TX_QUEUE_SIZE       24      // Software TX queue capacity
 
 // =============================================================================
 // Feature Flags
@@ -62,8 +65,8 @@
 
 #if ENABLE_STATUS_LED
 #define LED_PIN                 LED_BUILTIN
-#define LED_TX_BLINK_MS        250      // TX activity blink duration (ms)
-#define LED_RX_BLINK_MS        250      // RX activity blink duration (ms)
+#define LED_TX_BLINK_MS        50       // TX activity blink duration (ms)
+#define LED_RX_BLINK_MS        50       // RX activity blink duration (ms)
 #endif
 
 // =============================================================================

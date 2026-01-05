@@ -9,6 +9,7 @@
 #define RA4M1_CAN_H
 
 #include "CANBackend.h"
+#include "config.h"
 #include <Arduino_CAN.h>
 
 /**
@@ -33,6 +34,23 @@ public:
     bool setFilter(uint32_t mask, uint32_t filter) override;
     bool clearFilter() override;
 
+    /**
+     * Service the TX queue - call from poll() to drain queued frames.
+     * Attempts to send queued frames if hardware has space available.
+     */
+    void serviceTxQueue() override;
+
+    /**
+     * Get diagnostic counters.
+     * @param txQueueFull Output: TX queue full count (frames rejected)
+     */
+    void getCounters(uint32_t* txQueueFull) const;
+
+    /**
+     * Reset diagnostic counters.
+     */
+    void resetCounters();
+
 private:
     bool _isOpen;
     CANMode _mode;
@@ -42,6 +60,15 @@ private:
     uint32_t _filterMask;
     uint32_t _filterValue;
     bool _filterEnabled;
+
+    // TX queue (ring buffer)
+    CANFrame _txQueue[CAN_TX_QUEUE_SIZE];
+    uint8_t _txQueueHead;   // write() enqueues here
+    uint8_t _txQueueTail;   // serviceTxQueue() dequeues here
+    uint8_t _txQueueCount;  // Number of frames in queue
+
+    // Diagnostic counters
+    uint32_t _txQueueFullCount;  // Frames rejected due to queue full
 
     /**
      * Convert CANBitrate enum to Arduino_CAN CanBitRate.
@@ -56,6 +83,11 @@ private:
      * @return true if frame passes filter, false if rejected
      */
     bool passesFilter(uint32_t id) const;
+
+    /**
+     * Clear queued TX frames to avoid sending stale traffic on reopen.
+     */
+    void clearTxQueue();
 };
 
 #endif // RA4M1_CAN_H

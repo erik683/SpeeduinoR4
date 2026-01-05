@@ -1,5 +1,5 @@
 /**
- * SpeedCAN - SLCAN USB-to-CAN Adapter Firmware
+ * SpeeduinoR4 - SLCAN USB-to-CAN Adapter Firmware
  *
  * Main application entry point for Arduino Uno R4 WiFi.
  *

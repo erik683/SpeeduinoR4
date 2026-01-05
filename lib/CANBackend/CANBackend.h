@@ -149,6 +149,14 @@ public:
      */
     virtual bool clearFilter() = 0;
 
+    /**
+     * Service the TX queue (drain pending frames to hardware).
+     * Called periodically from protocol handler poll() to ensure
+     * queued frames are transmitted when hardware becomes available.
+     * No-op if backend doesn't implement TX queueing.
+     */
+    virtual void serviceTxQueue() = 0;
+
     virtual ~ICANBackend() = default;
 };
 

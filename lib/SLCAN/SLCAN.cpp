@@ -146,6 +146,9 @@ void SLCAN::poll(ITransport* transport) {
         return;
     }
 
+    // Step 0: Service TX queue first (drain pending TX frames)
+    _can.serviceTxQueue();
+
     if (!_autoForward) {
         // Auto-forward disabled, skip RX processing
         return;

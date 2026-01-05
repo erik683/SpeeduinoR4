@@ -11,6 +11,10 @@ RA4M1CAN::RA4M1CAN()
     , _filterMask(0)
     , _filterValue(0)
     , _filterEnabled(false)
+    , _txQueueHead(0)
+    , _txQueueTail(0)
+    , _txQueueCount(0)
+    , _txQueueFullCount(0)
 {
 }
 
@@ -45,6 +49,8 @@ bool RA4M1CAN::begin(CANBitrate bitrate, CANMode mode) {
         return false;
     }
 
+    clearTxQueue();
+
     // Close if already open
     if (_isOpen) {
         end();
@@ -73,6 +79,7 @@ void RA4M1CAN::end() {
         CAN.end();
         _isOpen = false;
     }
+    clearTxQueue();
 }
 
 bool RA4M1CAN::isOpen() const {
@@ -93,22 +100,39 @@ bool RA4M1CAN::write(const CANFrame& frame) {
         return false;
     }
 
-    // Create Arduino_CAN message
-    CanMsg msg;
+    // Try to send immediately if hardware can accept
+    // Note: Arduino_CAN library may not expose availableForWrite()
+    // Check if we have space in TX hardware FIFO by attempting write
 
-    if (frame.extended) {
-        msg = CanMsg(CanExtendedId(frame.id), frame.dlc, frame.data);
-    } else {
-        msg = CanMsg(CanStandardId(frame.id), frame.dlc, frame.data);
+    // If queue is empty, try immediate send
+    if (_txQueueCount == 0) {
+        // Create Arduino_CAN message
+        CanMsg msg;
+        if (frame.extended) {
+            msg = CanMsg(CanExtendedId(frame.id), frame.dlc, frame.data);
+        } else {
+            msg = CanMsg(CanStandardId(frame.id), frame.dlc, frame.data);
+        }
+
+        int rc = CAN.write(msg);
+        if (rc >= 0) {
+            // Successfully sent immediately
+            return true;
+        }
+        // Hardware FIFO likely full, fall through to queueing
     }
 
-    // RTR frames
-    // Note: Arduino_CAN CanMsg doesn't have explicit RTR support in the simple constructor.
-    // For RTR, we'd need to check if the library supports it or implement differently.
-    // For now, we send the frame as-is. RTR handling may need enhancement.
+    // Queue for later if space available
+    if (_txQueueCount < CAN_TX_QUEUE_SIZE) {
+        _txQueue[_txQueueHead] = frame;
+        _txQueueHead = (_txQueueHead + 1) % CAN_TX_QUEUE_SIZE;
+        _txQueueCount++;
+        return true;
+    }
 
-    int rc = CAN.write(msg);
-    return (rc >= 0);
+    // Queue full - reject frame
+    _txQueueFullCount++;
+    return false;
 }
 
 bool RA4M1CAN::available() {
@@ -208,4 +232,49 @@ bool RA4M1CAN::passesFilter(uint32_t id) const {
     // Standard acceptance filter logic:
     // Pass if (id & mask) == (filter & mask)
     return (id & _filterMask) == (_filterValue & _filterMask);
+}
+
+void RA4M1CAN::serviceTxQueue() {
+    if (!_isOpen) {
+        return;
+    }
+
+    // Attempt to drain queued TX frames
+    while (_txQueueCount > 0) {
+        // Get next queued frame
+        CANFrame& frame = _txQueue[_txQueueTail];
+
+        // Create Arduino_CAN message
+        CanMsg msg;
+        if (frame.extended) {
+            msg = CanMsg(CanExtendedId(frame.id), frame.dlc, frame.data);
+        } else {
+            msg = CanMsg(CanStandardId(frame.id), frame.dlc, frame.data);
+        }
+
+        // Try to send
+        int rc = CAN.write(msg);
+        if (rc >= 0) {
+            // Successfully sent, dequeue
+            _txQueueTail = (_txQueueTail + 1) % CAN_TX_QUEUE_SIZE;
+            _txQueueCount--;
+        } else {
+            // Hardware FIFO full, stop trying
+            break;
+        }
+    }
+}
+
+void RA4M1CAN::getCounters(uint32_t* txQueueFull) const {
+    if (txQueueFull) *txQueueFull = _txQueueFullCount;
+}
+
+void RA4M1CAN::resetCounters() {
+    _txQueueFullCount = 0;
+}
+
+void RA4M1CAN::clearTxQueue() {
+    _txQueueHead = 0;
+    _txQueueTail = 0;
+    _txQueueCount = 0;
 }
