@@ -22,11 +22,11 @@
 // =============================================================================
 
 #define SERIAL_BAUD_RATE        1000000
-#define CMD_BUFFER_SIZE         64      // Max command line length
-#define RESPONSE_BUFFER_SIZE    64      // Max response line length
+#define CMD_BUFFER_SIZE         96      // Max command line length
+#define RESPONSE_BUFFER_SIZE    96      // Max response line length
 
 // Serial RX buffering (for SerialTransport)
-#define SERIAL_RX_BUFFER_SIZE   256     // Per-line buffer capacity
+#define SERIAL_RX_BUFFER_SIZE   128     // Per-line buffer capacity
 #define SERIAL_CMD_QUEUE_SIZE   4       // Number of commands to queue
 #define MAX_CMDS_PER_LOOP       4       // Max commands processed per loop iteration
 
@@ -48,7 +48,7 @@
 #define MAX_FRAMES_PER_POLL     6       // Max frames forwarded per loop iteration
 
 // CAN TX buffering (backend layer - in RA4M1CAN)
-#define CAN_TX_QUEUE_SIZE       24      // Software TX queue capacity
+#define CAN_TX_QUEUE_SIZE       16      // Software TX queue capacity
 
 // =============================================================================
 // Feature Flags
@@ -56,7 +56,7 @@
 
 #define ENABLE_TIMESTAMPS       0       // Support Z0/Z1 timestamp commands
 #define ENABLE_STATUS_LED       1       // Blink LED_BUILTIN on TX/RX activity
-#define ENABLE_HW_FILTERS       1       // Hardware acceptance filtering (M/m commands)
+#define ENABLE_HW_FILTERS       0       // Hardware acceptance filtering (M/m commands)
 #define AUTO_FORWARD_RX         1       // Auto-forward received CAN frames to host
 
 // =============================================================================
