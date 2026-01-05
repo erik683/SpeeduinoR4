@@ -10,12 +10,17 @@
 
 #include "Transport.h"
 #include <Arduino.h>
+#include "config.h"
 
 /**
- * Default receive buffer size for line accumulation.
+ * Default values if not defined in config.h
  */
 #ifndef SERIAL_RX_BUFFER_SIZE
-#define SERIAL_RX_BUFFER_SIZE 64
+#define SERIAL_RX_BUFFER_SIZE 256
+#endif
+
+#ifndef SERIAL_CMD_QUEUE_SIZE
+#define SERIAL_CMD_QUEUE_SIZE 4
 #endif
 
 /**
@@ -40,6 +45,7 @@ public:
     void writeLine(const char* response) override;
     void writeChar(char c) override;
     void writeRaw(const char* data, size_t len) override;
+    bool writeWithPriority(const char* data, size_t len, WritePriority prio) override;
     void flush() override;
 
     /**
@@ -48,11 +54,41 @@ public:
      */
     void resetBuffer();
 
+    /**
+     * Get diagnostic counters.
+     * @param cmdResponseDrops Output: command responses dropped due to timeout
+     * @param canTxDrops Output: CAN RX frames dropped due to USB unavailable
+     * @param cmdOverflows Output: command queue overflows
+     */
+    void getCounters(uint32_t* cmdResponseDrops, uint32_t* canTxDrops, uint32_t* cmdOverflows) const;
+
+    /**
+     * Reset all diagnostic counters to zero.
+     */
+    void resetCounters();
+
 private:
     Stream& _serial;
-    char _rxBuffer[SERIAL_RX_BUFFER_SIZE];
-    size_t _rxIndex;
-    bool _lineReady;
+
+    // Multi-command queue
+    struct CommandSlot {
+        char buffer[SERIAL_RX_BUFFER_SIZE];
+        uint16_t length;
+        bool valid;
+    };
+
+    CommandSlot _cmdQueue[SERIAL_CMD_QUEUE_SIZE];
+    uint8_t _cmdHead;  // processIncoming() writes here
+    uint8_t _cmdTail;  // readLine() reads here
+
+    // Current accumulator (for incomplete line)
+    char _rxAccumulator[SERIAL_RX_BUFFER_SIZE];
+    uint16_t _rxAccIndex;
+
+    // Diagnostic counters
+    uint32_t _cmdResponseDropCount;  // Command responses dropped (timeout)
+    uint32_t _canTxDropCount;        // CAN RX frames dropped (no space)
+    uint32_t _cmdOverflowCount;      // Command queue overflow
 
     /**
      * Process incoming serial data into the line buffer.

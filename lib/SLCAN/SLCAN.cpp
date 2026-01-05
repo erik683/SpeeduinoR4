@@ -13,14 +13,25 @@ SLCAN::SLCAN(ICANBackend& can)
     , _state(SLCANState::Closed)
     , _configuredBitrate(SLCAN_BITRATE_500K)  // Default to S6 (500k)
     , _timestampEnabled(false)
+    , _autoForward(true)                      // Default: auto-forward enabled
     , _filterMask(0)
     , _filterCode(0)
+    , _rxHead(0)
+    , _rxTail(0)
+    , _rxOverflowCount(0)
+    , _canRxDropCount(0)
 #if ENABLE_STATUS_LED
     , _lastTxLedTime(0)
     , _lastRxLedTime(0)
     , _ledState(false)
 #endif
 {
+    // Initialize RX ring buffer
+    for (uint16_t i = 0; i < CAN_RX_QUEUE_SIZE; i++) {
+        _rxQueue[i].valid = false;
+        _rxQueue[i].timestamp = 0;
+    }
+
 #if ENABLE_STATUS_LED
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
@@ -135,22 +146,49 @@ void SLCAN::poll(ITransport* transport) {
         return;
     }
 
-    // Check for received CAN frames
-    while (_can.available()) {
+    if (!_autoForward) {
+        // Auto-forward disabled, skip RX processing
+        return;
+    }
+
+    // Step 1: Drain hardware backend into ring buffer (non-blocking)
+    drainFromBackend();
+
+    // Step 2: Forward from ring to serial, rate-limited
+    uint8_t framesProcessed = 0;
+
+    while (framesProcessed < MAX_FRAMES_PER_POLL) {
         CANFrame frame;
-        if (_can.read(frame)) {
+        uint16_t timestamp;
+
+        if (!getNextRxFrame(frame, &timestamp)) {
+            break;  // Ring empty
+        }
+
 #if ENABLE_STATUS_LED
-            blinkRxLed();
+        blinkRxLed();
 #endif
-            // Format and send the frame
-            char buffer[SLCAN_MAX_EXT_FRAME_LEN];
-            size_t len = formatFrame(frame, buffer, sizeof(buffer));
-            if (len > 0) {
-                transport->writeRaw(buffer, len);
-                transport->writeChar('\r');
+
+        // Format frame to SLCAN ASCII
+        char buffer[SLCAN_MAX_EXT_FRAME_LEN];
+        size_t len = formatFrame(frame, buffer, sizeof(buffer));
+        if (len > 0) {
+            if (len + 1 > sizeof(buffer)) {
+                _canRxDropCount++;
+                break;
+            }
+            buffer[len] = '\r';
+            // Attempt write with CAN_RX_FRAME priority (0ms timeout, drop if no space)
+            if (!transport->writeWithPriority(buffer, len + 1, WritePriority::CAN_RX_FRAME)) {
+                _canRxDropCount++;
+                break;  // USB blocked, stop forwarding this iteration (frames stay in ring)
             }
         }
+
+        framesProcessed++;
     }
+
+    // Note: Remaining frames stay in ring for next poll() call
 }
 
 bool SLCAN::isActive() const {
@@ -679,3 +717,58 @@ void SLCAN::updateLed() {
 }
 
 #endif // ENABLE_STATUS_LED
+
+// =============================================================================
+// RX Ring Buffer Management
+// =============================================================================
+
+void SLCAN::drainFromBackend() {
+    // Pull frames from hardware CAN backend into our protocol-layer ring
+    while (_can.available()) {
+        uint16_t nextHead = (_rxHead + 1) % CAN_RX_QUEUE_SIZE;
+
+        if (nextHead == _rxTail) {
+            // Ring full: drop NEWEST frame (per user preference - keep history)
+            _rxOverflowCount++;
+            return;  // Stop draining, preserve oldest frames
+        }
+
+        CANFrame msg;
+        if (_can.read(msg)) {
+            _rxQueue[_rxHead].msg = msg;
+            _rxQueue[_rxHead].timestamp = millis() & 0xFFFF;
+            _rxQueue[_rxHead].valid = true;
+            _rxHead = nextHead;
+        } else {
+            break;  // No more frames available
+        }
+    }
+}
+
+bool SLCAN::getNextRxFrame(CANFrame& frame, uint16_t* timestamp) {
+    // Internal helper: get next frame from ring
+    if (_rxTail == _rxHead) {
+        return false;  // Ring empty
+    }
+
+    frame = _rxQueue[_rxTail].msg;
+    if (timestamp) *timestamp = _rxQueue[_rxTail].timestamp;
+    _rxQueue[_rxTail].valid = false;
+    _rxTail = (_rxTail + 1) % CAN_RX_QUEUE_SIZE;
+
+    return true;
+}
+
+// =============================================================================
+// Diagnostic Counters
+// =============================================================================
+
+void SLCAN::getCounters(uint32_t* rxOverflows, uint32_t* canRxDrops) const {
+    if (rxOverflows) *rxOverflows = _rxOverflowCount;
+    if (canRxDrops) *canRxDrops = _canRxDropCount;
+}
+
+void SLCAN::resetCounters() {
+    _rxOverflowCount = 0;
+    _canRxDropCount = 0;
+}

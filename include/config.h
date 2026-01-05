@@ -21,9 +21,14 @@
 // Serial Configuration
 // =============================================================================
 
-#define SERIAL_BAUD_RATE        500000
+#define SERIAL_BAUD_RATE        1000000
 #define CMD_BUFFER_SIZE         64      // Max command line length
 #define RESPONSE_BUFFER_SIZE    64      // Max response line length
+
+// Serial RX buffering (for SerialTransport)
+#define SERIAL_RX_BUFFER_SIZE   256     // Per-line buffer (increased from 64)
+#define SERIAL_CMD_QUEUE_SIZE   4       // Number of commands to queue
+#define MAX_CMDS_PER_LOOP       4       // Max commands processed per loop iteration
 
 // =============================================================================
 // CAN Configuration
@@ -36,7 +41,11 @@
 
 // Default CAN bitrate (used if not set via SLCAN command)
 // Options: BR_125K, BR_250K, BR_500K, BR_1000K
-#define DEFAULT_CAN_BITRATE     6       // S5 = 250 Kbps
+#define DEFAULT_CAN_BITRATE     6       // S6 = 500 Kbps
+
+// CAN RX buffering (protocol layer - in SLCAN)
+#define CAN_RX_QUEUE_SIZE       64      // Ring buffer capacity
+#define MAX_FRAMES_PER_POLL     8       // Max frames forwarded per loop iteration
 
 // =============================================================================
 // Feature Flags
@@ -54,7 +63,7 @@
 #if ENABLE_STATUS_LED
 #define LED_PIN                 LED_BUILTIN
 #define LED_TX_BLINK_MS        250      // TX activity blink duration (ms)
-#define LED_RX_BLINK_MS        100      // RX activity blink duration (ms)
+#define LED_RX_BLINK_MS        250      // RX activity blink duration (ms)
 #endif
 
 // =============================================================================

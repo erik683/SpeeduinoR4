@@ -67,18 +67,29 @@ void setup() {
 // =============================================================================
 
 void loop() {
-    // Process incoming serial commands
-    if (transport.readLine(cmdBuffer, sizeof(cmdBuffer))) {
+    // Process ALL queued commands (up to a limit to prevent CAN starvation)
+    uint8_t cmdsProcessed = 0;
+
+    while (cmdsProcessed < MAX_CMDS_PER_LOOP) {
+        if (!transport.readLine(cmdBuffer, sizeof(cmdBuffer))) {
+            break;  // Queue empty
+        }
+
         // Dispatch command to appropriate handler
         bool hasResponse = dispatcher.dispatch(cmdBuffer, responseBuffer, sizeof(responseBuffer));
 
         if (hasResponse) {
-            // Send response
+            // Send response with high priority (10ms timeout)
             if (responseBuffer[0] != '\0') {
-                transport.writeRaw(responseBuffer, strlen(responseBuffer));
+                transport.writeWithPriority(responseBuffer, strlen(responseBuffer),
+                                           WritePriority::COMMAND_RESPONSE);
             }
-            transport.writeChar('\r');
+            // Send CR terminator also with high priority
+            char cr = '\r';
+            transport.writeWithPriority(&cr, 1, WritePriority::COMMAND_RESPONSE);
         }
+
+        cmdsProcessed++;
     }
 
     // Poll handlers for async operations (e.g., forwarding received CAN frames)

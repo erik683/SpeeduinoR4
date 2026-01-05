@@ -12,6 +12,15 @@
 #include <stddef.h>
 
 /**
+ * Write priority for non-blocking TX flow control.
+ * Determines behavior when output buffer is full.
+ */
+enum class WritePriority {
+    COMMAND_RESPONSE,  // Critical: command responses, wait briefly (10ms)
+    CAN_RX_FRAME      // Droppable: CAN RX frames, drop immediately if no space
+};
+
+/**
  * Abstract transport interface for line-based communication.
  *
  * Implementations handle the underlying transport (Serial, WiFi, etc.)
@@ -59,6 +68,17 @@ public:
      * @param len Number of bytes to write
      */
     virtual void writeRaw(const char* data, size_t len) = 0;
+
+    /**
+     * Write data with priority-based flow control.
+     * Non-blocking with configurable timeout based on priority.
+     *
+     * @param data Data to write
+     * @param len Number of bytes to write
+     * @param prio Write priority (command response vs CAN RX frame)
+     * @return true if written successfully, false if dropped/timeout
+     */
+    virtual bool writeWithPriority(const char* data, size_t len, WritePriority prio) = 0;
 
     /**
      * Flush any pending output.
