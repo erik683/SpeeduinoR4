@@ -150,3 +150,17 @@ Most tunables live in `include/config.h` (firmware version, buffer sizes, queue 
 - **Status flags (`F`)** are effectively stubbed: the Arduino_CAN API doesn't expose detailed error state, so `F` currently reports a "clean" status.
 - **RTR detection on RX**: Arduino_CAN does not expose an RTR flag, so received RTR frames are not identified as RTR.
 - **Acceptance filtering** is implemented as a **software filter** in `RA4M1CAN` (hardware filtering via the Arduino_CAN API is limited).
+
+
+## SLCAN spec deviations
+
+This firmware aims to be compatible with the Lawicel SLCAN protocol, but the following behaviors are not fully spec-compliant:
+
+- `s...` (custom bit timing) is not supported and always returns error.
+- `S<n>` presets are limited to `S4/S5/S6/S8`; other presets return error.
+- `X0/X1`, `P`, and `A` are defined but not implemented.
+- `L` listen-only is best-effort; the Arduino_CAN API does not expose true hardware listen-only mode.
+- `F` status flags are effectively stubbed (always reports clean status).
+- RX RTR frames cannot be detected, so RTR indication on received frames is lost.
+- `N` returns a fixed ASCII string (`NSCAN`) instead of a 4-hex-digit serial number.
+- `M`/`m` require 8 hex digits; 11-bit (4-hex-digit) masks/codes are rejected.
