@@ -103,15 +103,16 @@ If timestamps are enabled (`Z1`), 4 hex timestamp digits are appended.
 
 | Command | Meaning | Response |
 |---|---|---|
-| `F` | Read status flags | `Fxx` |
+| `F` | Read status flags | `Fxx` (software-level error tracking: TX/RX buffer full, data overrun) |
 | `V` | Firmware version | `Vxxyy` (major/minor in hex nibbles; e.g. `1.2` -> `V0102`) |
-| `N` | Serial number | Currently fixed string `NSCAN` |
+| `N` | Serial number | `Nxxxx` (4 hex digits; configurable in `config.h`) |
 
 ### Filters / timestamps
 
 | Command | Meaning | Notes |
 |---|---|---|
 | `Z0` / `Z1` | Disable/enable RX timestamps | When enabled, RX frames include a 16-bit ms timestamp suffix. |
+| `X0` / `X1` | Disable/enable auto-poll/send | When disabled (X0), RX frames are not automatically forwarded to host. |
 | `Mxxxxxxxx` | Acceptance mask | 8 hex digits. Filter logic: `(id & mask) == (code & mask)` |
 | `mxxxxxxxx` | Acceptance code | 8 hex digits. Setting mask to `00000000` effectively accepts all frames. |
 
@@ -145,9 +146,9 @@ Most tunables live in `include/config.h` (firmware version, buffer sizes, queue 
 
 - **Custom bit timing** (`s...`) is not supported.
 - **Bitrate presets** are restricted to `S4/S5/S6/S8` (125k/250k/500k/1M) due to the current limitations of the Arduino_CAN library.
-- **Common SLCAN extensions** `X0/X1` (auto-poll toggle), `P` (poll one), `A` (poll all) are defined in `lib/SLCAN/SLCANCommands.h` but not currently handled.
+- **Common SLCAN extensions** `P` (poll one), `A` (poll all) are defined in `lib/SLCAN/SLCANCommands.h` but not currently handled. (`X0/X1` is now implemented.)
 - **True hardware listen-only** is not enabled: the Arduino_CAN API doesn't expose RA4M1 listen-only configuration. Current behavior is "don't transmit".
-- **Status flags (`F`)** are effectively stubbed: the Arduino_CAN API doesn't expose detailed error state, so `F` currently reports a "clean" status.
+- **Status flags (`F`)** track software-level errors (TX/RX buffer full, data overrun). Hardware error counters (TEC/REC, bus-off, arbitration lost) would require direct RA4M1 register access (see code comments for details).
 - **RTR detection on RX**: Arduino_CAN does not expose an RTR flag, so received RTR frames are not identified as RTR.
 - **Acceptance filtering** is implemented as a **software filter** in `RA4M1CAN` (hardware filtering via the Arduino_CAN API is limited).
 
@@ -158,9 +159,8 @@ This firmware aims to be compatible with the Lawicel SLCAN protocol, but the fol
 
 - `s...` (custom bit timing) is not supported and always returns error.
 - `S<n>` presets are limited to `S4/S5/S6/S8`; other presets return error.
-- `X0/X1`, `P`, and `A` are defined but not implemented.
+- `P` and `A` (poll commands) are defined but not implemented.
 - `L` listen-only is best-effort; the Arduino_CAN API does not expose true hardware listen-only mode.
-- `F` status flags are effectively stubbed (always reports clean status).
+- `F` status flags track software errors only; hardware error counters require direct register access.
 - RX RTR frames cannot be detected, so RTR indication on received frames is lost.
-- `N` returns a fixed ASCII string (`NSCAN`) instead of a 4-hex-digit serial number.
 - `M`/`m` require 8 hex digits; 11-bit (4-hex-digit) masks/codes are rejected.
