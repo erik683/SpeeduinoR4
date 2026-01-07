@@ -16,17 +16,18 @@
 #define FIRMWARE_VERSION_MINOR  2
 #define FIRMWARE_NAME           "SpeeduinoR4"
 #define FIRMWARE_HW_VERSION     "1.0"   // Hardware revision string
+#define FIRMWARE_SERIAL_NUMBER  0x0001  // Device serial number (16-bit)
 
 // =============================================================================
 // Serial Configuration
 // =============================================================================
 
-#define SERIAL_BAUD_RATE        1000000
-#define CMD_BUFFER_SIZE         96      // Max command line length
-#define RESPONSE_BUFFER_SIZE    96      // Max response line length
+#define SERIAL_BAUD_RATE        500000
+#define CMD_BUFFER_SIZE         64      // Max command line length
+#define RESPONSE_BUFFER_SIZE    64      // Max response line length
 
 // Serial RX buffering (for SerialTransport)
-#define SERIAL_RX_BUFFER_SIZE   128     // Per-line buffer capacity
+#define SERIAL_RX_BUFFER_SIZE   64     // Per-line buffer capacity
 #define SERIAL_CMD_QUEUE_SIZE   4       // Number of commands to queue
 #define MAX_CMDS_PER_LOOP       4       // Max commands processed per loop iteration
 
@@ -44,7 +45,7 @@
 #define DEFAULT_CAN_BITRATE     6       // S6 = 500 Kbps
 
 // CAN RX buffering (protocol layer - in SLCAN)
-#define CAN_RX_QUEUE_SIZE       128      // Ring buffer capacity
+#define CAN_RX_QUEUE_SIZE       64      // Ring buffer capacity
 #define MAX_FRAMES_PER_POLL     6       // Max frames forwarded per loop iteration
 
 // CAN TX buffering (backend layer - in RA4M1CAN)
