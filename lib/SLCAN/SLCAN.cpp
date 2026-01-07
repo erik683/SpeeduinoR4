@@ -65,6 +65,7 @@ bool SLCAN::canHandle(const char* cmd) const {
         case SLCAN_CMD_TIMESTAMP:
         case SLCAN_CMD_FILTER_MASK:
         case SLCAN_CMD_FILTER_CODE:
+        case SLCAN_CMD_AUTOPOLL:
             return true;
         default:
             return false;
@@ -125,6 +126,9 @@ bool SLCAN::processCommand(const char* cmd, char* response, size_t maxLen) {
 
         case SLCAN_CMD_FILTER_CODE:
             return handleFilterCode(cmd, response);
+
+        case SLCAN_CMD_AUTOPOLL:
+            return handleAutopoll(cmd, response);
 
         default:
             setError(response);
@@ -416,13 +420,21 @@ bool SLCAN::handleStatus(char* response) {
     CANStatus status = _can.getStatus();
 
     uint8_t flags = 0;
-    if (status.rxFifoFull)      flags |= SLCAN_STATUS_RX_FULL;
-    if (status.txFifoFull)      flags |= SLCAN_STATUS_TX_FULL;
-    if (status.errorWarning)    flags |= SLCAN_STATUS_ERR_WARNING;
-    if (status.dataOverrun)     flags |= SLCAN_STATUS_DATA_OVERRUN;
-    if (status.errorPassive)    flags |= SLCAN_STATUS_ERR_PASSIVE;
-    if (status.arbitrationLost) flags |= SLCAN_STATUS_ARB_LOST;
-    if (status.busError)        flags |= SLCAN_STATUS_BUS_ERROR;
+
+    // Check SLCAN RX ring buffer fullness
+    uint16_t rxCount = (_rxHead >= _rxTail) ?
+                       (_rxHead - _rxTail) :
+                       (CAN_RX_QUEUE_SIZE - _rxTail + _rxHead);
+    bool rxRingFull = (rxCount >= (CAN_RX_QUEUE_SIZE - 1));
+
+    if (rxRingFull || status.rxFifoFull) flags |= SLCAN_STATUS_RX_FULL;
+    if (status.txFifoFull)                flags |= SLCAN_STATUS_TX_FULL;
+    if (status.errorWarning)              flags |= SLCAN_STATUS_ERR_WARNING;
+    if (status.dataOverrun || _rxOverflowCount > 0)
+                                          flags |= SLCAN_STATUS_DATA_OVERRUN;
+    if (status.errorPassive)              flags |= SLCAN_STATUS_ERR_PASSIVE;
+    if (status.arbitrationLost)           flags |= SLCAN_STATUS_ARB_LOST;
+    if (status.busError)                  flags |= SLCAN_STATUS_BUS_ERROR;
 
     // Format: Fxx
     response[0] = 'F';
@@ -444,13 +456,12 @@ bool SLCAN::handleVersion(char* response) {
 }
 
 bool SLCAN::handleSerial(char* response) {
-    // Format: Nxxxx (serial number)
-    // Use a fixed serial for now - could be made unique per device
+    // Format: Nxxxx (4 hex digits for 16-bit serial number)
     response[0] = 'N';
-    response[1] = 'S';
-    response[2] = 'C';
-    response[3] = 'A';
-    response[4] = 'N';
+    response[1] = nibbleToHexChar((FIRMWARE_SERIAL_NUMBER >> 12) & 0x0F);
+    response[2] = nibbleToHexChar((FIRMWARE_SERIAL_NUMBER >> 8) & 0x0F);
+    response[3] = nibbleToHexChar((FIRMWARE_SERIAL_NUMBER >> 4) & 0x0F);
+    response[4] = nibbleToHexChar(FIRMWARE_SERIAL_NUMBER & 0x0F);
     response[5] = '\0';
     return true;
 }
@@ -524,6 +535,26 @@ bool SLCAN::handleFilterCode(const char* cmd, char* response) {
     }
 
     setOk(response);
+    return true;
+}
+
+bool SLCAN::handleAutopoll(const char* cmd, char* response) {
+    // Format: X0 or X1
+    if (strlen(cmd) < 2) {
+        setError(response);
+        return true;
+    }
+
+    char val = cmd[1];
+    if (val == '0') {
+        _autoForward = false;
+        setOk(response);
+    } else if (val == '1') {
+        _autoForward = true;
+        setOk(response);
+    } else {
+        setError(response);
+    }
     return true;
 }
 

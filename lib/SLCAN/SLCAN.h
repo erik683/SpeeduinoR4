@@ -43,6 +43,7 @@ enum class SLCANState : uint8_t {
  *   V      : Get version
  *   N      : Get serial number
  *   Z0/Z1  : Disable/enable timestamps
+ *   X0/X1  : Disable/enable auto-poll/send
  *   M/m    : Set acceptance filter mask/code
  */
 class SLCAN : public IProtocolHandler {
@@ -131,6 +132,7 @@ private:
     bool handleTimestamp(const char* cmd, char* response);
     bool handleFilterMask(const char* cmd, char* response);
     bool handleFilterCode(const char* cmd, char* response);
+    bool handleAutopoll(const char* cmd, char* response);
 
     // Helper functions
     bool parseFrame(const char* cmd, CANFrame& frame, bool extended, bool rtr);
