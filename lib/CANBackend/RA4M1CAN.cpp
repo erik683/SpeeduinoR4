@@ -59,15 +59,15 @@ bool RA4M1CAN::begin(CANBitrate bitrate, CANMode mode) {
     // Initialize CAN controller
     CanBitRate arduinoBitrate = toArduinoBitrate(bitrate);
 
-    if (!CAN.begin(arduinoBitrate)) {
-        return false;
-    }
+    // Official Arduino_CAN library's begin() returns void, not bool
+    // We assume success as there's no error reporting mechanism
+    CAN.begin(arduinoBitrate);
 
     _isOpen = true;
     _mode = mode;
     _bitrate = bitrate;
 
-    // Note: Arduino_CAN library doesn't have a direct listen-only mode setting.
+    // Note: Official Arduino_CAN library doesn't have a direct listen-only mode setting.
     // For listen-only mode, we simply won't transmit (checked in write()).
     // True hardware listen-only would require direct register access.
 
@@ -101,25 +101,20 @@ bool RA4M1CAN::write(const CANFrame& frame) {
     }
 
     // Try to send immediately if hardware can accept
-    // Note: Arduino_CAN library may not expose availableForWrite()
-    // Check if we have space in TX hardware FIFO by attempting write
+    // Official Arduino_CAN write() returns 1 on success, negative error code on failure
 
     // If queue is empty, try immediate send
     if (_txQueueCount == 0) {
-        // Create Arduino_CAN message
-        CanMsg msg;
-        if (frame.extended) {
-            msg = CanMsg(CanExtendedId(frame.id), frame.dlc, frame.data);
-        } else {
-            msg = CanMsg(CanStandardId(frame.id), frame.dlc, frame.data);
-        }
+        // Create Arduino_CAN message using helper functions
+        uint32_t canId = frame.extended ? CanExtendedId(frame.id) : CanStandardId(frame.id);
+        CanMsg msg(canId, frame.dlc, frame.data);
 
         int rc = CAN.write(msg);
-        if (rc >= 0) {
-            // Successfully sent immediately
+        if (rc == 1) {
+            // Successfully sent immediately (official library returns 1 for success)
             return true;
         }
-        // Hardware FIFO likely full, fall through to queueing
+        // Hardware FIFO likely full (negative error code), fall through to queueing
     }
 
     // Queue for later if space available
@@ -154,10 +149,12 @@ bool RA4M1CAN::read(CANFrame& frame) {
     CanMsg msg = CAN.read();
 
     // Extract frame data
-    frame.id = msg.id;
-    frame.dlc = msg.data_length;
+    // Official library stores extended flag in bit 31 of id field
     frame.extended = msg.isExtendedId();
-    // Note: Arduino_CAN library doesn't expose RTR flag directly
+    // Extract the actual ID value (without flag bit)
+    frame.id = frame.extended ? msg.getExtendedId() : msg.getStandardId();
+    frame.dlc = msg.data_length;
+    // Note: Official Arduino_CAN library doesn't expose RTR flag directly
     // RTR frames are rare in practice; set to false
     frame.rtr = false;
 
@@ -187,24 +184,37 @@ CANStatus RA4M1CAN::getStatus() {
     CANStatus status = {};
 
     // The Arduino_CAN library doesn't provide detailed error status access.
-    // We return a basic status structure.
-    // For more detailed status, direct register access would be needed.
+    // We track software-level errors and map them to SLCAN status flags.
+    // For true hardware error counters (TEC/REC), direct RA4M1 register
+    // access would be needed (see RA4M1 User's Manual CAN chapter).
 
     if (!_isOpen) {
         return status;
     }
 
-    // Check if CAN is available (basic operational check)
-    // Advanced error flags would require direct RA4M1 register access
+    // Software-level status tracking
+    // Map our TX queue state to txFifoFull flag
+    status.txFifoFull = (_txQueueCount >= CAN_TX_QUEUE_SIZE);
 
-    // For now, return a clean status if we're open
+    // RX FIFO full is checked at the protocol layer (SLCAN ring buffer)
     status.rxFifoFull = false;
-    status.txFifoFull = false;
-    status.errorWarning = false;
-    status.dataOverrun = false;
-    status.errorPassive = false;
-    status.arbitrationLost = false;
-    status.busError = false;
+
+    // Data overrun: set if we've dropped frames due to TX queue full
+    status.dataOverrun = (_txQueueFullCount > 0);
+
+    // Hardware error flags would require direct register access
+    // These remain false without hardware register access:
+    status.errorWarning = false;    // Would need: TEC or REC > 96
+    status.errorPassive = false;    // Would need: TEC or REC > 127
+    status.arbitrationLost = false; // Would need: CAN arbitration lost flag
+    status.busError = false;        // Would need: CAN bus error flag
+
+    // Note: To implement true hardware error reporting, access RA4M1 CAN
+    // peripheral registers directly (bypassing Arduino_CAN library):
+    // - CAN0.ECSR.BYTE for error counters
+    // - CAN0.EIFR.BYTE for error interrupt flags
+    // - CAN0.STR.BYTE for status register
+    // See RA4M1 Group User's Manual: Hardware for register definitions
 
     return status;
 }
@@ -244,22 +254,18 @@ void RA4M1CAN::serviceTxQueue() {
         // Get next queued frame
         CANFrame& frame = _txQueue[_txQueueTail];
 
-        // Create Arduino_CAN message
-        CanMsg msg;
-        if (frame.extended) {
-            msg = CanMsg(CanExtendedId(frame.id), frame.dlc, frame.data);
-        } else {
-            msg = CanMsg(CanStandardId(frame.id), frame.dlc, frame.data);
-        }
+        // Create Arduino_CAN message using helper functions
+        uint32_t canId = frame.extended ? CanExtendedId(frame.id) : CanStandardId(frame.id);
+        CanMsg msg(canId, frame.dlc, frame.data);
 
         // Try to send
         int rc = CAN.write(msg);
-        if (rc >= 0) {
-            // Successfully sent, dequeue
+        if (rc == 1) {
+            // Successfully sent (official library returns 1), dequeue
             _txQueueTail = (_txQueueTail + 1) % CAN_TX_QUEUE_SIZE;
             _txQueueCount--;
         } else {
-            // Hardware FIFO full, stop trying
+            // Hardware FIFO full (negative error code), stop trying
             break;
         }
     }
